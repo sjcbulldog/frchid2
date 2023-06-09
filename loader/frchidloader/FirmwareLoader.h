@@ -36,6 +36,7 @@ private:
     bool packet_sent_;
     int segment_;
     int index_;
+    int bytes_sent_;
     QVector<uint32_t> segaddrs_;
 };
 

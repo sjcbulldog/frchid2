@@ -15,6 +15,7 @@
 #define STATUS_ROW_IN_PROGRESS      (0)
 #define STATUS_ROW_DONE             (1)
 #define STATUS_OK                   (2)
+#define STATUS_ERROR                (3)
 
 static const USB_DEVICE_INFO usb_deviceInfo = {
     0x058B,                                 /* VendorId    */
@@ -32,6 +33,7 @@ static uint32_t         flash_addr ;
 static uint8_t          flash_row_buffer[FLASH_ROW_SIZE] ;
 static cyhal_flash_t    flash_obj ;
 static char             lead_char ;
+static char             msg_buffer[256] ;
 
 static void usb_add_cdc(void) {
     static U8             OutBuffer[USB_FS_BULK_MAX_PACKET_SIZE];
@@ -103,6 +105,12 @@ void sendMessage(const char *msg)
     USBD_CDC_Write(usb_cdcHandle, write_buffer, strlen(write_buffer), 0) ;
 }
 
+void sendOK(uint32_t addr)
+{
+    sprintf(write_buffer, "$OK:%lx\n", flash_addr) ;
+    USBD_CDC_Write(usb_cdcHandle, write_buffer, strlen(write_buffer), 0) ;
+}
+
 uint32_t hexToDec(char ch)
 {
     uint32_t ret = 0 ;
@@ -125,12 +133,12 @@ int isHexDigit(char ch)
     return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch <= 'A' && ch >= 'F') ;
 }
 
-
 int extractByte(int index, uint8_t *value)
 {
     if (!isHexDigit(read_buffer[index]) || !isHexDigit(read_buffer[index + 1]))
     {
-        sendError("invalid character in hex number");
+        sprintf(msg_buffer, "invalid character ('%c') in hex number", read_buffer[index]) ;
+        sendError(msg_buffer) ;
         return STATUS_ERROR ;
     }
 
@@ -181,6 +189,8 @@ int processFlashRowMiddle(int index, int numbytes)
     uint8_t value ;
     int st;
 
+    printf("reading flash row data, index = %d, row_index = %ld, numbytes = %d\n", index, row_index, numbytes) ;
+
     if (lead_char != 0)
     {
         if (isHexDigit(read_buffer[index]))
@@ -209,18 +219,25 @@ int processFlashRowMiddle(int index, int numbytes)
         st = extractByte(index, &value) ;
         if (st != STATUS_OK)
             return STATUS_ROW_ERROR ;
+        index += 2 ;
 
         flash_row_buffer[row_index++] = value ;
     }
 
     if (read_buffer[index] == '$' && read_buffer[index + 1] == '\n')
     {
-        printf("End of flash row detected - %d bytes\n", row_index) ;
+        printf("End of flash row detected - %ld bytes\n", row_index) ;
         if (row_index == FLASH_ROW_SIZE)
         {
-            cyhal_flash_write(&flash_obj, flash_addr, flash_row_buffer);
+            printf("  Writing data to flash\n") ;
+            cyhal_flash_write(&flash_obj, flash_addr, (const uint32_t *)flash_row_buffer);
+            printf("  Write was sucessful\n") ;
+            sendOK(flash_addr) ;
+            row_index = 0 ;
         }
     }
+
+    return STATUS_ROW_IN_PROGRESS ;
 }
 
 int processFlashRowStart(int numbytes)
@@ -245,7 +262,8 @@ int processFlashRowStart(int numbytes)
     {
         return STATUS_ROW_ERROR ;
     }
-    printf("Flash address is %x\n", flash_addr) ;
+
+    printf("Flash address is %lx\n", flash_addr) ;
     index += 8 ;
 
     if (read_buffer[index] != '$')
@@ -277,7 +295,6 @@ int processHostCmd()
 void firmware_upgrade_run()
 {
     int num_bytes_received ;
-    int rindex = 0 ;
     int status ;
 
     while ( (USBD_GetState() & USB_STAT_CONFIGURED) != USB_STAT_CONFIGURED)
@@ -287,7 +304,10 @@ void firmware_upgrade_run()
     printf("FRCHID: info: firmware upgrade CDC device configured\n") ;
 
     while (true) {
+        status = STATUS_OK ;
+
         num_bytes_received = USBD_CDC_Receive(usb_cdcHandle, read_buffer, sizeof(read_buffer), 0);
+        printf("Received: %s\n", read_buffer) ;
 
         if (row_index != 0) 
         {
@@ -303,12 +323,18 @@ void firmware_upgrade_run()
             //
             if (read_buffer[0] == '$') 
             {
-                status = processFlashRowStart() ;
+                status = processFlashRowStart(num_bytes_received) ;
             }
             else if (read_buffer[0] == '#') 
             {
                 status = processHostCmd() ;
             }
+        }
+
+        if (status == STATUS_ROW_ERROR) 
+        {
+            sendMessage("error encountered - please retry update") ;
+            while (1) ;
         }
     }
 }

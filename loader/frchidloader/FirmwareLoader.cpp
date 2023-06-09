@@ -5,6 +5,10 @@
 
 FirmwareLoader::FirmwareLoader(QObject* parent) : QObject(parent)
 {
+    index_ = 0;
+    packet_sent_ = false;
+    port_ = nullptr;
+    segment_ = -1;
 }
 
 bool FirmwareLoader::setSerialPort(const QString& name)
@@ -53,22 +57,56 @@ void FirmwareLoader::bytesWritten(qint64 data)
 void FirmwareLoader::readyRead()
 {
     QByteArray data = port_->readAll();
-    std::cout << "frchidloader: bytes read " << data.count() << std::endl;
+    QString str = QString::fromUtf8(data);
+    if (str.startsWith('*')) 
+    {
+        // Error message
+        std::cerr << "frchidloader: bootloader: error: " << str.mid(1).toStdString() << std::endl;
+    }
+    else if (str.startsWith('&'))
+    {
+        // Information message
+        std::cerr << "frchidloader: bootloader: info: " << str.mid(1).toStdString() << std::endl;
+    }
+    else if (str.startsWith('$'))
+    {
+        std::cout << "DONE PACKET: " << str.toStdString() << std::endl;
+        uint32_t addr = segaddrs_.at(segment_);
+        const QByteArray& data = reader_.data(addr);
+
+        index_ += bytes_sent_;
+        if (index_ > data.size())
+        {
+            std::cout << "NEW SEGMENT BEING SENT" << std::endl;
+            segment_++;
+            if (segment_ == segaddrs_.count())
+            {
+                //
+                // We are done sending data, should tell the other end we are done
+                //
+                port_->write("#done#\n");
+                return;
+            }
+        }
+
+        sendNextRow();
+    }
 }
 
 void FirmwareLoader::sendNextRow()
 {
     uint32_t addr = segaddrs_.at(segment_);
     const QByteArray& data = reader_.data(addr);
+    uint32_t rowaddr = addr + index_;
 
-    qint64 towrite = data.size() - index_;
-    if (towrite > flashRowSize)
-        towrite = flashRowSize;
+    bytes_sent_ = data.size() - index_;
+    if (bytes_sent_ > flashRowSize)
+        bytes_sent_ = flashRowSize;
 
-    QByteArray packet = data.mid(index_, towrite);
+    QByteArray packet = data.mid(index_, bytes_sent_);
 
-    QString packstr = "$" + QString("%1").arg(addr, 8, 16, QLatin1Char('0')) + "$";
-    packstr += data.mid(index_, towrite).toHex() + "$\n";
+    QString packstr = "$" + QString("%1").arg(rowaddr, 8, 16, QLatin1Char('0')) + "$";
+    packstr += data.mid(index_, bytes_sent_).toHex() + "$\n";
 
     packet_sent_ = true;
     port_->write(packstr.toUtf8());
