@@ -67,7 +67,7 @@ void FirmwareLoader::sendNextRow()
 
     QByteArray packet = data.mid(index_, towrite);
 
-    QString packstr = "$" + QString::number(addr, 16) + "$";
+    QString packstr = "$" + QString("%1").arg(addr, 8, 16, QLatin1Char('0')) + "$";
     packstr += data.mid(index_, towrite).toHex() + "$\n";
 
     packet_sent_ = true;

@@ -14,6 +14,7 @@
 #define STATUS_ROW_ERROR            (-1)
 #define STATUS_ROW_IN_PROGRESS      (0)
 #define STATUS_ROW_DONE             (1)
+#define STATUS_OK                   (2)
 
 static const USB_DEVICE_INFO usb_deviceInfo = {
     0x058B,                                 /* VendorId    */
@@ -30,6 +31,7 @@ static uint32_t         row_index ;
 static uint32_t         flash_addr ;
 static uint8_t          flash_row_buffer[FLASH_ROW_SIZE] ;
 static cyhal_flash_t    flash_obj ;
+static char             lead_char ;
 
 static void usb_add_cdc(void) {
     static U8             OutBuffer[USB_FS_BULK_MAX_PACKET_SIZE];
@@ -80,6 +82,7 @@ void firmware_upgrade_init()
     cyhal_flash_init(&flash_obj) ;
 
     row_index = 0 ;
+    lead_char = 0 ;
 }
 
 void sendError(const char *msg)
@@ -91,9 +94,13 @@ void sendError(const char *msg)
     USBD_CDC_Write(usb_cdcHandle, write_buffer, strlen(write_buffer), 0) ;
 }
 
-int processFlashRowMiddle(int index, int end)
+void sendMessage(const char *msg)
 {
+    strcpy(write_buffer, "&");
+    strcat(write_buffer, msg) ;
+    strcat(write_buffer, "\n") ;
 
+    USBD_CDC_Write(usb_cdcHandle, write_buffer, strlen(write_buffer), 0) ;
 }
 
 uint32_t hexToDec(char ch)
@@ -113,32 +120,143 @@ uint32_t hexToDec(char ch)
     return ret ;
 }
 
+int isHexDigit(char ch)
+{
+    return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch <= 'A' && ch >= 'F') ;
+}
+
+
+int extractByte(int index, uint8_t *value)
+{
+    if (!isHexDigit(read_buffer[index]) || !isHexDigit(read_buffer[index + 1]))
+    {
+        sendError("invalid character in hex number");
+        return STATUS_ERROR ;
+    }
+
+    *value = hexToDec(read_buffer[index]) << 4 | hexToDec(read_buffer[index + 1]) ;
+    return STATUS_OK ;
+}
+
+int extractWord(int index, uint16_t *value)
+{
+    uint8_t temp ;
+    int st ;
+
+    st = extractByte(index, &temp);
+    if (st != STATUS_OK)
+        return st ;
+
+    *value = (temp << 8) ;
+
+    st = extractByte(index + 2, &temp);
+    if (st != STATUS_OK)
+        return st ;
+
+    *value |= (temp) ;
+    return STATUS_OK ;
+}
+
+int extractLongWord(int index, uint32_t *value)
+{
+    uint16_t temp ;
+    int st ;
+
+    st = extractWord(index, &temp);
+    if (st != STATUS_OK)
+        return st ;
+
+    *value = (temp << 16) ;
+
+    st = extractWord(index + 4, &temp);
+    if (st != STATUS_OK)
+        return st ;
+
+    *value |= (temp) ;
+    return STATUS_OK ;
+}
+
+int processFlashRowMiddle(int index, int numbytes)
+{
+    uint8_t value ;
+    int st;
+
+    if (lead_char != 0)
+    {
+        if (isHexDigit(read_buffer[index]))
+        {
+            sendError("invalid hex digit in row data") ;
+            return STATUS_ROW_ERROR ;
+        }
+
+        value = hexToDec(lead_char) << 4 | hexToDec(read_buffer[index]);
+        flash_row_buffer[row_index++] = value ;
+        lead_char = 0 ;
+    }
+
+    while (index < numbytes && read_buffer[index] != '$')
+    {
+        if (numbytes - index == 1 && read_buffer[index + 1] == '$')
+        {
+            //
+            // Ok the PC side broke the line between two characters for a single
+            // byte.
+            //
+            lead_char = read_buffer[index] ;
+            return STATUS_ROW_IN_PROGRESS ;
+        }
+
+        st = extractByte(index, &value) ;
+        if (st != STATUS_OK)
+            return STATUS_ROW_ERROR ;
+
+        flash_row_buffer[row_index++] = value ;
+    }
+
+    if (read_buffer[index] == '$' && read_buffer[index + 1] == '\n')
+    {
+        printf("End of flash row detected - %d bytes\n", row_index) ;
+        if (row_index == FLASH_ROW_SIZE)
+        {
+            cyhal_flash_write(&flash_obj, flash_addr, flash_row_buffer);
+        }
+    }
+}
+
 int processFlashRowStart(int numbytes)
 {
     int index = 0 ;
 
-    if (read_buffer[index] != '$') {
-        sendError("flash row does not start with a '$' character") ;
+    if (read_buffer[index] != '$') 
+    {
+        sendError("flash row address does not start with a '$' character") ;
         return STATUS_ROW_ERROR ;
     }
     index++ ;
 
     // Get the address
-    flash_addr = 0 ;
-    while (index < numbytes)
+    if (numbytes - index < 10)
     {
-        if (read_buffer[index] == '$')
-            break ;
+        sendError("invalid address record at start of row, insufficient length") ;
+        return STATUS_ROW_ERROR ;
+    }
 
-        uint32_t val = hexToDec(read_buffer[index]) << 4 | hexToDec(read_buffer[index + 1]);
-        index += 2 ;
+    if (extractLongWord(index, &flash_addr) != STATUS_OK)
+    {
+        return STATUS_ROW_ERROR ;
+    }
+    printf("Flash address is %x\n", flash_addr) ;
+    index += 8 ;
 
-        flash_addr = (flash_addr << 8) | val ;
+    if (read_buffer[index] != '$')
+    {
+        sendError("flash row address does not end with a '$' character") ;
+        return STATUS_ROW_ERROR ;
     }
     index++ ;
-    printf("Flash address is %x\n", flash_addr) ;
 
-    return processFlashRowMiddle(index++)
+    row_index = 0 ;
+    return processFlashRowMiddle(index, numbytes);
 }
 
 int processHostCmd()
@@ -146,7 +264,11 @@ int processHostCmd()
     int st = STATUS_ROW_ERROR ;
 
     if (strncmp(read_buffer, "#done#", 7) == 0) {
+        sendMessage("Press the reset button to finish upgrade process") ;
         while (1) {
+            //
+            // Wait for the user to reset the device
+            //
         }
     }
     return st ;
