@@ -20,7 +20,7 @@ uint32_t HexFileReader::extractHexChars(const QString& line, int pos, int len)
 	return ret;
 }
 
-uint8_t HexFileReader::computeSum(uint8_t len, uint16_t addr, uint8_t type, const QVector<uint8_t>& data)
+uint8_t HexFileReader::computeSum(uint8_t len, uint16_t addr, uint8_t type, const QByteArray& data)
 {
 	uint8_t v = 0;
 
@@ -36,7 +36,7 @@ uint8_t HexFileReader::computeSum(uint8_t len, uint16_t addr, uint8_t type, cons
 	return (~v) + 1;
 }
 
-bool HexFileReader::processRecord(uint8_t len, uint16_t addr, uint8_t type, const QVector<uint8_t>& data)
+bool HexFileReader::processRecord(uint8_t len, uint16_t addr, uint8_t type, const QByteArray& data)
 {
 	bool ret = true;
 
@@ -65,7 +65,7 @@ bool HexFileReader::processRecord(uint8_t len, uint16_t addr, uint8_t type, cons
 	return ret;
 }
 
-void HexFileReader::insertAt(uint32_t addr, const QVector<uint8_t>& data)
+void HexFileReader::insertAt(uint32_t addr, const QByteArray& data)
 {
 	bool found = false;
 
@@ -94,7 +94,7 @@ void HexFileReader::insertAt(uint32_t addr, const QVector<uint8_t>& data)
 bool HexFileReader::processLine(const QString& line)
 {
 	uint32_t index = 1;
-	QVector<uint8_t> data;
+	QByteArray data;
 
 	if (line[0] != ':')
 		return true;

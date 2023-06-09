@@ -16,17 +16,26 @@ public:
 public slots:
     void run();
 
-
 signals:
     void finished();
 
 private:
-    void sendSegment(uint32_t addr, const QVector<uint8_t>& data);
+    void bytesWritten(qint64 count);
+    void readyRead();
+    void sendNextRow();
+
+private:
+    static constexpr const qint64 flashRowSize = 512;
 
 private:
     QString filename_;
     QSerialPort *port_;
     QSerialPortInfo info_;
     HexFileReader reader_;
+
+    bool packet_sent_;
+    int segment_;
+    int index_;
+    QVector<uint32_t> segaddrs_;
 };
 

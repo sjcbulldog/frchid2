@@ -45,53 +45,45 @@ bool FirmwareLoader::setFirmwareFile(const QString& filename)
     return true ;
 }
 
-void FirmwareLoader::sendSegment(uint32_t addr, const QVector<uint8_t>& data)
+void FirmwareLoader::bytesWritten(qint64 data)
 {
-    static const int flashRowSize = 512;
+    std::cout << "frchidloader: bytes written " << data << std::endl;
+}
 
-    uint32_t total = data.size();
-    uint32_t index = 0;
-    QString str;
+void FirmwareLoader::readyRead()
+{
+    QByteArray data = port_->readAll();
+    std::cout << "frchidloader: bytes read " << data.count() << std::endl;
+}
 
-    QByteArray packet;
+void FirmwareLoader::sendNextRow()
+{
+    uint32_t addr = segaddrs_.at(segment_);
+    const QByteArray& data = reader_.data(addr);
 
-    while (total > 0) {
-        uint32_t towrite = total;
-        if (towrite > flashRowSize)
-            towrite = flashRowSize;
+    qint64 towrite = data.size() - index_;
+    if (towrite > flashRowSize)
+        towrite = flashRowSize;
 
-        packet.clear();
+    QByteArray packet = data.mid(index_, towrite);
 
-        for (int i = 0; i < towrite; i++) {
-            if (index > data.size())
-                break;
+    QString packstr = "$" + QString::number(addr, 16) + "$";
+    packstr += data.mid(index_, towrite).toHex() + "$\n";
 
-            packet.append(data[index++]);
-        }
-
-        str = "$" + QString::number(addr, 16) + "$";
-        str += ":" + packet.toHex() + ":\n";
-
-        port_->write(str.toUtf8());
-        port_->flush();
-
-        addr += packet.count();
-        total -= packet.count();
-
-        //
-        // Now, wait for a response
-        //
-        QString respstr;
-        while (true) {
-            QByteArray resp = port_->readAll();
-            respstr += QString::fromUtf8(resp);
-            if (respstr.contains("$OK$\n"))
-                break;
-        }
-    }
+    packet_sent_ = true;
+    port_->write(packstr.toUtf8());
+    port_->flush();
 }
 
 void FirmwareLoader::run()
 {
-    emit finished();
+    (void)connect(port_, &QSerialPort::bytesWritten, this, &FirmwareLoader::bytesWritten);
+    (void)connect(port_, &QSerialPort::readyRead, this, &FirmwareLoader::readyRead);
+
+    segaddrs_ = reader_.segmentAddrs();
+    index_ = 0;
+    segment_ = 0;
+    packet_sent_ = false;
+
+    sendNextRow();
 }

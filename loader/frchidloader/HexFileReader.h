@@ -13,7 +13,7 @@ public:
 		return segments_.keys();
 	}
 
-	const QVector<uint8_t> data(uint32_t seg) const {
+	QByteArray data(uint32_t seg) const {
 		return segments_[seg];
 	}
 
@@ -34,8 +34,8 @@ private:
 		return ret;
 	}
 
-	bool processRecord(uint8_t len, uint16_t addr, uint8_t type, const QVector<uint8_t>& data);
-	uint8_t computeSum(uint8_t len, uint16_t addr, uint8_t type, const QVector<uint8_t>& data);
+	bool processRecord(uint8_t len, uint16_t addr, uint8_t type, const QByteArray& data);
+	uint8_t computeSum(uint8_t len, uint16_t addr, uint8_t type, const QByteArray& data);
 	uint32_t extractHexChars(const QString& line, int pos, int length);
 	bool processLine(const QString& line);
 
@@ -43,12 +43,12 @@ private:
 		return ((v >> 8) & 0xff) | ((v << 8) & 0xFF00);
 	}
 
-	void insertAt(uint32_t addr, const QVector<uint8_t>& data);
+	void insertAt(uint32_t addr, const QByteArray & data);
 
 private:
 	uint32_t baseaddr_;
 	uint32_t lastaddr_;
-	QVector<uint8_t> data_;
+	QByteArray data_;
 
-	QMap<uint32_t, QVector<uint8_t>> segments_;
+	QMap<uint32_t, QByteArray> segments_;
 };

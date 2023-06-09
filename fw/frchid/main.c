@@ -10,6 +10,8 @@
 #include <watchdog.h>
 #include <string.h>
 
+extern int set_img_ok(int, int) ;
+
 static void init_failed(int msec)
 {
     while (1)

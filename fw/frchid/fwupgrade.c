@@ -9,6 +9,12 @@
 #define VENDOR_ID           0x058B  /* For Infineon Technologies */
 #define PRODUCT_ID          0x0288  /* Procured PID for HID Generic device */
 
+#define FLASH_ROW_SIZE           (512)
+
+#define STATUS_ROW_ERROR            (-1)
+#define STATUS_ROW_IN_PROGRESS      (0)
+#define STATUS_ROW_DONE             (1)
+
 static const USB_DEVICE_INFO usb_deviceInfo = {
     0x058B,                                 /* VendorId    */
     0x027E,                                 /* ProductId    */
@@ -17,9 +23,13 @@ static const USB_DEVICE_INFO usb_deviceInfo = {
     "70341425"                              /* SerialNumber */
 };
 
-static USB_CDC_HANDLE usb_cdcHandle;
-static char           read_buffer[USB_FS_BULK_MAX_PACKET_SIZE];
-// static char           write_buffer[USB_FS_BULK_MAX_PACKET_SIZE];
+static USB_CDC_HANDLE   usb_cdcHandle;
+static char             read_buffer[USB_FS_BULK_MAX_PACKET_SIZE];
+static char             write_buffer[USB_FS_BULK_MAX_PACKET_SIZE] ;
+static uint32_t         row_index ;
+static uint32_t         flash_addr ;
+static uint8_t          flash_row_buffer[FLASH_ROW_SIZE] ;
+static cyhal_flash_t    flash_obj ;
 
 static void usb_add_cdc(void) {
     static U8             OutBuffer[USB_FS_BULK_MAX_PACKET_SIZE];
@@ -66,11 +76,87 @@ void firmware_upgrade_init()
 
     /* Start the USB stack */
     USBD_Start();
+
+    cyhal_flash_init(&flash_obj) ;
+
+    row_index = 0 ;
+}
+
+void sendError(const char *msg)
+{
+    strcpy(write_buffer, "*");
+    strcat(write_buffer, msg) ;
+    strcat(write_buffer, "\n") ;
+
+    USBD_CDC_Write(usb_cdcHandle, write_buffer, strlen(write_buffer), 0) ;
+}
+
+int processFlashRowMiddle(int index, int end)
+{
+
+}
+
+uint32_t hexToDec(char ch)
+{
+    uint32_t ret = 0 ;
+
+    if (ch >= '0' && ch < '9') {
+        ret = ch - '0' ;
+    }
+    else if (ch >= 'A' && ch < 'F') {
+        ret = ch - 'A' + 10 ;
+    }
+        if (ch >= 'a' && ch < 'f') {
+        ret = ch - 'a' + 10 ;
+    }
+
+    return ret ;
+}
+
+int processFlashRowStart(int numbytes)
+{
+    int index = 0 ;
+
+    if (read_buffer[index] != '$') {
+        sendError("flash row does not start with a '$' character") ;
+        return STATUS_ROW_ERROR ;
+    }
+    index++ ;
+
+    // Get the address
+    flash_addr = 0 ;
+    while (index < numbytes)
+    {
+        if (read_buffer[index] == '$')
+            break ;
+
+        uint32_t val = hexToDec(read_buffer[index]) << 4 | hexToDec(read_buffer[index + 1]);
+        index += 2 ;
+
+        flash_addr = (flash_addr << 8) | val ;
+    }
+    index++ ;
+    printf("Flash address is %x\n", flash_addr) ;
+
+    return processFlashRowMiddle(index++)
+}
+
+int processHostCmd()
+{
+    int st = STATUS_ROW_ERROR ;
+
+    if (strncmp(read_buffer, "#done#", 7) == 0) {
+        while (1) {
+        }
+    }
+    return st ;
 }
 
 void firmware_upgrade_run()
 {
     int num_bytes_received ;
+    int rindex = 0 ;
+    int status ;
 
     while ( (USBD_GetState() & USB_STAT_CONFIGURED) != USB_STAT_CONFIGURED)
     {
@@ -80,28 +166,27 @@ void firmware_upgrade_run()
 
     while (true) {
         num_bytes_received = USBD_CDC_Receive(usb_cdcHandle, read_buffer, sizeof(read_buffer), 0);
-        bool lf = false ;
-        printf("received:") ;
-        for(int i = 0 ; i < num_bytes_received ; i++) {
-            if ((i % 32) == 0 && i != 0) {
-                printf("\n        :") ;
-            }
-            if (read_buffer[i] == '\n' || read_buffer[i] == 0x0d)
-                lf = true ;
 
-            if ((i % 2) == 0)
-                printf(" ") ;
-                
-            printf("%x", read_buffer[i]) ;
-
+        if (row_index != 0) 
+        {
+            //
+            // We are processing data in a row
+            //
+            status = processFlashRowMiddle(0, num_bytes_received) ;
         }
-        printf("\n") ;
-
-        if (lf) {
-            printf("  Writing response\n") ;
-            int len = USBD_CDC_Write(usb_cdcHandle, "$OK$\n", 5, 0) ;
-            USBD_CDC_WaitForTX(usb_cdcHandle, 0);
-            printf("  Writing response - written %d\n", len) ;
+        else
+        {
+            //
+            // We are processing the start of a command
+            //
+            if (read_buffer[0] == '$') 
+            {
+                status = processFlashRowStart() ;
+            }
+            else if (read_buffer[0] == '#') 
+            {
+                status = processHostCmd() ;
+            }
         }
     }
 }
