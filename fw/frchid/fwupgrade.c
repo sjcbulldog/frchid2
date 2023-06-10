@@ -6,9 +6,6 @@
 #include "cyhal.h"
 #include <stdio.h>
 
-#define VENDOR_ID           0x058B  /* For Infineon Technologies */
-#define PRODUCT_ID          0x0288  /* Procured PID for HID Generic device */
-
 #define FLASH_ROW_SIZE           (512)
 
 #define STATUS_ROW_ERROR            (-1)
