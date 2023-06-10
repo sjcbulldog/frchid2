@@ -31,7 +31,10 @@
             "frchid": true
         },
         "files.associations": {
-            "fwupgrade.h": "c"
+            "fwupgrade.h": "c",
+            "type_traits": "c",
+            "xtr1common": "c",
+            "utility": "c"
         }
     },
     "extensions": {

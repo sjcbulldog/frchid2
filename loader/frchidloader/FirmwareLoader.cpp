@@ -46,6 +46,8 @@ bool FirmwareLoader::setFirmwareFile(const QString& filename)
         return false;
     }
 
+    reader_.normalize(512);
+
     return true ;
 }
 
@@ -71,14 +73,16 @@ void FirmwareLoader::readyRead()
     else if (str.startsWith('$'))
     {
         std::cout << "DONE PACKET: " << str.toStdString() << std::endl;
+
         uint32_t addr = segaddrs_.at(segment_);
         const QByteArray& data = reader_.data(addr);
 
         index_ += bytes_sent_;
-        if (index_ > data.size())
+        if (index_ >= data.size())
         {
             std::cout << "NEW SEGMENT BEING SENT" << std::endl;
             segment_++;
+            index_ = 0;
             if (segment_ == segaddrs_.count())
             {
                 //
@@ -107,6 +111,8 @@ void FirmwareLoader::sendNextRow()
 
     QString packstr = "$" + QString("%1").arg(rowaddr, 8, 16, QLatin1Char('0')) + "$";
     packstr += data.mid(index_, bytes_sent_).toHex() + "$\n";
+
+    std::cout << "Sending: " + packstr.mid(0, 16).toStdString() << std::endl;
 
     packet_sent_ = true;
     port_->write(packstr.toUtf8());

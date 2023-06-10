@@ -26,7 +26,7 @@ static const USB_DEVICE_INFO usb_deviceInfo = {
 };
 
 static USB_CDC_HANDLE   usb_cdcHandle;
-static char             read_buffer[USB_FS_BULK_MAX_PACKET_SIZE];
+static char             read_buffer[USB_FS_BULK_MAX_PACKET_SIZE + 1];
 static char             write_buffer[USB_FS_BULK_MAX_PACKET_SIZE] ;
 static uint32_t         row_index ;
 static uint32_t         flash_addr ;
@@ -115,13 +115,13 @@ uint32_t hexToDec(char ch)
 {
     uint32_t ret = 0 ;
 
-    if (ch >= '0' && ch < '9') {
+    if (ch >= '0' && ch <= '9') {
         ret = ch - '0' ;
     }
-    else if (ch >= 'A' && ch < 'F') {
+    else if (ch >= 'A' && ch <='F') {
         ret = ch - 'A' + 10 ;
     }
-        if (ch >= 'a' && ch < 'f') {
+    else if (ch >= 'a' && ch <= 'f') {
         ret = ch - 'a' + 10 ;
     }
 
@@ -133,7 +133,7 @@ int isHexDigit(char ch)
     return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch <= 'A' && ch >= 'F') ;
 }
 
-int extractByte(int index, uint8_t *value)
+int extractByte(int index, uint8_t *vb)
 {
     if (!isHexDigit(read_buffer[index]) || !isHexDigit(read_buffer[index + 1]))
     {
@@ -142,45 +142,45 @@ int extractByte(int index, uint8_t *value)
         return STATUS_ERROR ;
     }
 
-    *value = hexToDec(read_buffer[index]) << 4 | hexToDec(read_buffer[index + 1]) ;
+    *vb = hexToDec(read_buffer[index]) << 4 | hexToDec(read_buffer[index + 1]) ;
     return STATUS_OK ;
 }
 
-int extractWord(int index, uint16_t *value)
+int extractWord(int index, uint16_t *vw)
 {
-    uint8_t temp ;
+    uint8_t tb ;
     int st ;
 
-    st = extractByte(index, &temp);
+    st = extractByte(index, &tb);
     if (st != STATUS_OK)
         return st ;
 
-    *value = (temp << 8) ;
+    *vw = (tb << 8) ;
 
-    st = extractByte(index + 2, &temp);
+    st = extractByte(index + 2, &tb);
     if (st != STATUS_OK)
         return st ;
 
-    *value |= (temp) ;
+    *vw |= (tb) ;
     return STATUS_OK ;
 }
 
-int extractLongWord(int index, uint32_t *value)
+int extractLongWord(int index, uint32_t *vl)
 {
-    uint16_t temp ;
+    uint16_t tw ;
     int st ;
 
-    st = extractWord(index, &temp);
+    st = extractWord(index, &tw);
     if (st != STATUS_OK)
         return st ;
 
-    *value = (temp << 16) ;
+    *vl = (tw << 16) ;
 
-    st = extractWord(index + 4, &temp);
+    st = extractWord(index + 4, &tw);
     if (st != STATUS_OK)
         return st ;
 
-    *value |= (temp) ;
+    *vl |= (tw) ;
     return STATUS_OK ;
 }
 
@@ -188,6 +188,7 @@ int processFlashRowMiddle(int index, int numbytes)
 {
     uint8_t value ;
     int st;
+    cy_rslt_t result ;
 
     printf("reading flash row data, index = %d, row_index = %ld, numbytes = %d\n", index, row_index, numbytes) ;
 
@@ -226,15 +227,31 @@ int processFlashRowMiddle(int index, int numbytes)
 
     if (read_buffer[index] == '$' && read_buffer[index + 1] == '\n')
     {
-        printf("End of flash row detected - %ld bytes\n", row_index) ;
-        if (row_index == FLASH_ROW_SIZE)
+        printf("End of flash row detected - %ld bytes, addr %lx\n", row_index, flash_addr) ;
+        printf("  Erase flash %lx\n", flash_addr) ;
+        result = cyhal_flash_erase(&flash_obj, flash_addr) ;
+        if (result != CY_RSLT_SUCCESS)
         {
-            printf("  Writing data to flash\n") ;
-            cyhal_flash_write(&flash_obj, flash_addr, (const uint32_t *)flash_row_buffer);
-            printf("  Write was sucessful\n") ;
-            sendOK(flash_addr) ;
-            row_index = 0 ;
+            printf("  Flash erase failed %lx\n", result) ;
+            sprintf(msg_buffer, "flash erase failed, code %lx", result) ;
+            sendError(msg_buffer) ;
+            return STATUS_ROW_ERROR ;
         }
+
+        printf("  Writing data to flash\n") ;
+        result = cyhal_flash_write(&flash_obj, flash_addr, (const uint32_t *)flash_row_buffer);
+        if (result != CY_RSLT_SUCCESS)
+        {
+            printf("  Flash write failed %lx\n", result) ;
+            sprintf(msg_buffer, "flash write failed, code %lx", result) ;
+            sendError(msg_buffer) ;
+            return STATUS_ROW_ERROR ;
+        }
+
+        printf("  Write was sucessful, %d bytes\n", CY_FLASH_SIZEOF_ROW) ;
+        sendOK(flash_addr) ;
+        row_index = 0 ;
+        memset(flash_row_buffer, 0, FLASH_ROW_SIZE);
     }
 
     return STATUS_ROW_IN_PROGRESS ;
@@ -256,6 +273,11 @@ int processFlashRowStart(int numbytes)
     {
         sendError("invalid address record at start of row, insufficient length") ;
         return STATUS_ROW_ERROR ;
+    }
+
+    if (strncmp(read_buffer + index, "101f2980", 8) == 0)
+    {
+        printf("here\n") ;
     }
 
     if (extractLongWord(index, &flash_addr) != STATUS_OK)
@@ -307,8 +329,10 @@ void firmware_upgrade_run()
         status = STATUS_OK ;
 
         num_bytes_received = USBD_CDC_Receive(usb_cdcHandle, read_buffer, sizeof(read_buffer), 0);
-        printf("Received: %s\n", read_buffer) ;
+        read_buffer[num_bytes_received] = '\0' ;
 
+        printf("Row index: %ld\n", row_index) ;
+        printf("Received: %s\n", read_buffer) ;
         if (row_index != 0) 
         {
             //

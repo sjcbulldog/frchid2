@@ -17,6 +17,8 @@ public:
 		return segments_[seg];
 	}
 
+	void normalize(uint32_t size);
+
 private:
 	uint8_t convertHexChar(const QChar &ch) {
 		uint8_t ret = 0;

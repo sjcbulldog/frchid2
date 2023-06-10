@@ -8,6 +8,26 @@ HexFileReader::HexFileReader()
 	lastaddr_ = 0;
 }
 
+void HexFileReader::normalize(uint32_t size)
+{
+	QList<uint32_t> addrs = segments_.keys();
+	for (uint32_t addr : addrs)
+	{
+		if ((addr % size) != 0)
+		{
+			const QByteArray& data = segments_[addr];
+			uint32_t newaddr = (addr / size) * size;
+			uint32_t prepend = addr - newaddr;
+
+			QByteArray newdata(prepend, 0);
+			newdata.append(data);
+
+			segments_.remove(addr);
+			segments_.insert(newaddr, newdata);
+		}
+	}
+}
+
 uint32_t HexFileReader::extractHexChars(const QString& line, int pos, int len)
 {
 	uint32_t ret = 0;

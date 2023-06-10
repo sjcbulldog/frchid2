@@ -23,6 +23,7 @@ private:
     void bytesWritten(qint64 count);
     void readyRead();
     void sendNextRow();
+    void startSegment();
 
 private:
     static constexpr const qint64 flashRowSize = 512;
