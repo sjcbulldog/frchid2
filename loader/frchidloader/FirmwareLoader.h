@@ -22,8 +22,9 @@ signals:
 private:
     void bytesWritten(qint64 count);
     void readyRead();
-    void sendNextRow();
-    void startSegment();
+    void sendRow();
+    bool nextRow();
+    void computeRows();
 
 private:
     static constexpr const qint64 flashRowSize = 512;
@@ -38,6 +39,8 @@ private:
     int segment_;
     int index_;
     int bytes_sent_;
+    int total_rows_;
+    int sent_rows_;
     QVector<uint32_t> segaddrs_;
 };
 

@@ -8,15 +8,15 @@ HexFileReader::HexFileReader()
 	lastaddr_ = 0;
 }
 
-void HexFileReader::normalize(uint32_t size)
+void HexFileReader::normalize(uint32_t rowsize)
 {
 	QList<uint32_t> addrs = segments_.keys();
 	for (uint32_t addr : addrs)
 	{
-		if ((addr % size) != 0)
+		if ((addr % rowsize) != 0)
 		{
 			const QByteArray& data = segments_[addr];
-			uint32_t newaddr = (addr / size) * size;
+			uint32_t newaddr = (addr / rowsize) * rowsize;
 			uint32_t prepend = addr - newaddr;
 
 			QByteArray newdata(prepend, 0);
@@ -24,6 +24,20 @@ void HexFileReader::normalize(uint32_t size)
 
 			segments_.remove(addr);
 			segments_.insert(newaddr, newdata);
+		}
+	}
+
+	addrs = segments_.keys();
+	for (uint32_t addr : addrs)
+	{
+		QByteArray data = segments_[addr];
+		if ((data.count() % rowsize) != 0)
+		{
+			uint32_t oldsize = data.count();
+			uint32_t rows = oldsize / rowsize + 1;
+			uint32_t postpend = rows * rowsize - data.count();
+			data.append(QByteArray(postpend, 0));
+			segments_[addr] = data;
 		}
 	}
 }

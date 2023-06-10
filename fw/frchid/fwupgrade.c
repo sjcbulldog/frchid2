@@ -111,6 +111,12 @@ void sendOK(uint32_t addr)
     USBD_CDC_Write(usb_cdcHandle, write_buffer, strlen(write_buffer), 0) ;
 }
 
+void sendComplete()
+{
+    sprintf(write_buffer, "#done\n") ;
+    USBD_CDC_Write(usb_cdcHandle, write_buffer, strlen(write_buffer), 0) ;  
+}
+
 uint32_t hexToDec(char ch)
 {
     uint32_t ret = 0 ;
@@ -190,8 +196,6 @@ int processFlashRowMiddle(int index, int numbytes)
     int st;
     cy_rslt_t result ;
 
-    printf("reading flash row data, index = %d, row_index = %ld, numbytes = %d\n", index, row_index, numbytes) ;
-
     if (lead_char != 0)
     {
         if (isHexDigit(read_buffer[index]))
@@ -227,28 +231,23 @@ int processFlashRowMiddle(int index, int numbytes)
 
     if (read_buffer[index] == '$' && read_buffer[index + 1] == '\n')
     {
-        printf("End of flash row detected - %ld bytes, addr %lx\n", row_index, flash_addr) ;
-        printf("  Erase flash %lx\n", flash_addr) ;
         result = cyhal_flash_erase(&flash_obj, flash_addr) ;
         if (result != CY_RSLT_SUCCESS)
         {
-            printf("  Flash erase failed %lx\n", result) ;
-            sprintf(msg_buffer, "flash erase failed, code %lx", result) ;
+            printf("  Flash erase failed row %lx, error %lx\n", flash_addr, result) ;
+            sprintf(msg_buffer, "flash erase failed row %lx, code %lx", flash_addr, result) ;
             sendError(msg_buffer) ;
             return STATUS_ROW_ERROR ;
         }
 
-        printf("  Writing data to flash\n") ;
         result = cyhal_flash_write(&flash_obj, flash_addr, (const uint32_t *)flash_row_buffer);
         if (result != CY_RSLT_SUCCESS)
         {
-            printf("  Flash write failed %lx\n", result) ;
-            sprintf(msg_buffer, "flash write failed, code %lx", result) ;
+            printf("  Flash write failed row %lx, code %lx\n", flash_addr, result) ;
+            sprintf(msg_buffer, "flash write failed row %lx, code %lx", flash_addr, result) ;
             sendError(msg_buffer) ;
             return STATUS_ROW_ERROR ;
         }
-
-        printf("  Write was sucessful, %d bytes\n", CY_FLASH_SIZEOF_ROW) ;
         sendOK(flash_addr) ;
         row_index = 0 ;
         memset(flash_row_buffer, 0, FLASH_ROW_SIZE);
@@ -275,17 +274,11 @@ int processFlashRowStart(int numbytes)
         return STATUS_ROW_ERROR ;
     }
 
-    if (strncmp(read_buffer + index, "101f2980", 8) == 0)
-    {
-        printf("here\n") ;
-    }
-
     if (extractLongWord(index, &flash_addr) != STATUS_OK)
     {
         return STATUS_ROW_ERROR ;
     }
 
-    printf("Flash address is %lx\n", flash_addr) ;
     index += 8 ;
 
     if (read_buffer[index] != '$')
@@ -303,8 +296,12 @@ int processHostCmd()
 {
     int st = STATUS_ROW_ERROR ;
 
-    if (strncmp(read_buffer, "#done#", 7) == 0) {
+    printf("Processing host command '%s'", read_buffer) ;
+
+    if (strncmp(read_buffer, "#done#", 6) == 0) {
         sendMessage("Press the reset button to finish upgrade process") ;
+        sendComplete() ;
+        
         while (1) {
             //
             // Wait for the user to reset the device
@@ -330,9 +327,6 @@ void firmware_upgrade_run()
 
         num_bytes_received = USBD_CDC_Receive(usb_cdcHandle, read_buffer, sizeof(read_buffer), 0);
         read_buffer[num_bytes_received] = '\0' ;
-
-        printf("Row index: %ld\n", row_index) ;
-        printf("Received: %s\n", read_buffer) ;
         if (row_index != 0) 
         {
             //
@@ -365,7 +359,7 @@ void firmware_upgrade_run()
 
 void run_firmware_upgrade()
 {
-    printf("Running firmware upgrade\n") ;
+    printf("FRCHID: firmware upgrade mode\n") ;
     firmware_upgrade_init() ;
     firmware_upgrade_run() ;
 }
