@@ -30,14 +30,14 @@ static void run_normal_hid()
 
     if (hw_init() == 0) {
         printf("FRCHID: hardware initialization failed\n");
-        init_failed(1000) ;
+        init_failed(500) ;
     }
 
     printf("FRCHID: hardware initialization completed\n") ;
 
     if (hid_init() == 0) {
         printf("FRCHID: USB HID initialization failed") ;
-        init_failed(2000) ;
+        init_failed(1500) ;
     }
 
     printf("FRCHID: USBHID initialization completed\n") ;

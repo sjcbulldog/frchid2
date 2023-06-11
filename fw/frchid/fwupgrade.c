@@ -358,5 +358,6 @@ void run_firmware_upgrade()
 {
     printf("FRCHID: firmware upgrade mode\n") ;
     firmware_upgrade_init() ;
+    cyhal_gpio_write(CYBSP_USER_LED, 0) ;
     firmware_upgrade_run() ;
 }
