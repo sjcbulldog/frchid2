@@ -47,4 +47,5 @@ TOOLCHAIN=GCC_ARM
 # Custom -- build with custom configuration, set the optimization flag in CFLAGS
 CONFIG=Debug
 
+
 include ../common_app.mk

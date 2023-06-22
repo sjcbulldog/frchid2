@@ -212,5 +212,8 @@ CY_GETLIBS_SHARED_NAME=mtb_shared
 # IDE provided compiler by default).
 CY_COMPILER_PATH=
 
-
 include $(CY_TOOLS_DIR)/make/start.mk
+
+init:
+	$(info Updating python at location '$(PYTHON_PATH)')
+	$(PYTHON_PATH) -m pip install -r $(SEARCH_mcuboot)/scripts/requirements.txt

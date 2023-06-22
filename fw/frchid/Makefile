@@ -44,7 +44,6 @@ VERBOSE=
 # MCUboot Specific Configuration
 ###############################################################################
 
-PYTHON_PATH=$(CY_TOOLS_DIR)/python/python.exe
 
 # Include the application make files
 include ../bootloader_cm0p/shared_config.mk

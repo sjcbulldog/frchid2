@@ -121,10 +121,9 @@ int hw_init()
    memset(result_cached, 0, sizeof(result_cached));
 
    for(int i = 0 ; i < FRC_HID_INPUT_COUNT ; i++) {
-      int drive = CYBSP_USER_BTN_DRIVE ;
       int pin = get_input_pin(i) ;
 
-      res = cyhal_gpio_init(pin, CYHAL_GPIO_DIR_INPUT, drive, true);
+      res = cyhal_gpio_init(pin, CYHAL_GPIO_DIR_INPUT, CYHAL_GPIO_DRIVE_PULLDOWN, false);
       if (res != CY_RSLT_SUCCESS)
       {
          printf("FRCHID: GPIO input pin %d initialization failed. Error: %lx\n", i, (long unsigned int)res);

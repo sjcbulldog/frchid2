@@ -38,3 +38,5 @@ MTB_PROJECTS=bootloader_cm0p frchid
 include common_app.mk
 
 include $(CY_TOOLS_DIR)/make/application.mk
+
+

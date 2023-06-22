@@ -47,3 +47,8 @@ CY_TOOLS_DIR=$(lastword $(sort $(wildcard $(CY_TOOLS_PATHS))))
 ifeq ($(CY_TOOLS_DIR),)
 $(error Unable to find any of the available CY_TOOLS_PATHS -- $(CY_TOOLS_PATHS))
 endif
+
+#
+# The location of python
+#
+PYTHON_PATH=$(CY_TOOLS_DIR)/python/python.exe
