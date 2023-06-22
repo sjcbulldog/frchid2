@@ -79,6 +79,36 @@ void FRCHidBootLoader::browse()
     ui.filename->setText(filename);
 }
 
+void FRCHidBootLoader::sentRow(int row)
+{
+    ui.progress->setMaximum(loader_->totalRows());
+    ui.progress->setValue(row);
+}
+
+void FRCHidBootLoader::finished()
+{
+    QMessageBox::information(this, "Complete", "Firmware sucesfully updated.");
+    ui.filename->setDisabled(false);
+    ui.program->setDisabled(false);
+    ui.ports->setDisabled(false);
+
+    port_->close();
+    loader_->deleteLater();
+    loader_ = nullptr;
+
+    QCoreApplication::quit();
+}
+
+void FRCHidBootLoader::errorMsg(const QString& str)
+{
+
+}
+
+void FRCHidBootLoader::userMsg(const QString& str)
+{
+
+}
+
 void FRCHidBootLoader::program()
 {
     if (ui.ports->currentIndex() == -1)
@@ -109,8 +139,18 @@ void FRCHidBootLoader::program()
     reader_.normalize(flashRowSize);
 
     loader_ = new FirmwareBootloader(reader_, *port_, flashRowSize);
+
+    (void)connect(loader_, &FirmwareBootloader::progress, this, &FRCHidBootLoader::sentRow);
+    (void)connect(loader_, &FirmwareBootloader::finished, this, &FRCHidBootLoader::finished);
+    (void)connect(loader_, &FirmwareBootloader::errorMessage, this, &FRCHidBootLoader::errorMsg);
+    (void)connect(loader_, &FirmwareBootloader::userMessage, this, &FRCHidBootLoader::userMsg);
+
     ui.progress->setMinimum(0);
     ui.progress->setMaximum(loader_->totalRows());
+
+    ui.filename->setDisabled(true);
+    ui.program->setDisabled(true);
+    ui.ports->setDisabled(true);
 
     loader_->start();
 }

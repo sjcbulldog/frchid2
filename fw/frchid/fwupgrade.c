@@ -296,7 +296,6 @@ int processHostCmd()
     printf("Processing host command '%s'", read_buffer) ;
 
     if (strncmp(read_buffer, "#done#", 6) == 0) {
-        sendMessage("Press the reset button to finish upgrade process") ;
         sendComplete() ;
         
         while (1) {

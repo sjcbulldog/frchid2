@@ -4,13 +4,14 @@
 
 FirmwareBootloader::FirmwareBootloader(HexFileReader& rdr, QSerialPort& port, int rowsize) : reader_(rdr), port_(port)
 {
-    computeRows();
-
+    flash_row_size_ = rowsize;
     segaddrs_ = reader_.segmentAddrs();
     index_ = 0;
     segment_ = 0;
     packet_sent_ = false;
-    flash_row_size_ = rowsize;
+    sent_rows_ = 0;
+
+    computeRows();
 
     (void)connect(&port_, &QSerialPort::readyRead, this, &FirmwareBootloader::readyRead);
 }
@@ -56,8 +57,6 @@ void FirmwareBootloader::readyRead()
     QByteArray data = port_.readAll();
     QString str = QString::fromUtf8(data);
 
-    qDebug() << "readyRead: '" << str << "'";
-
     if (str.startsWith('*'))
     {
         emit errorMessage(str.mid(1));
@@ -73,7 +72,6 @@ void FirmwareBootloader::readyRead()
     else if (str.startsWith('$'))
     {
         sent_rows_++;
-
         emit progress(sent_rows_);
 
         if (!nextRow())
@@ -105,8 +103,6 @@ void FirmwareBootloader::sendRow()
     //
     uint32_t rowaddr = addr + index_;
 
-    qDebug() << "sendRow: address = " << rowaddr;
-
     //
     // Compute the amount of data to send, should never exceed a flash row size
     //
@@ -129,8 +125,6 @@ void FirmwareBootloader::sendRow()
     packet_sent_ = true;
     port_.write(packstr.toUtf8());
     port_.flush();
-
-
 }
 
 void FirmwareBootloader::start()

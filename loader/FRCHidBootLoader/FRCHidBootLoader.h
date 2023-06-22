@@ -30,6 +30,11 @@ private:
     void program();
     void browse();
 
+    void sentRow(int row);
+    void finished();
+    void errorMsg(const QString& str);
+    void userMsg(const QString& str);
+
 private:
     QSettings settings_;
     Ui::FRCHidBootLoaderClass ui;
