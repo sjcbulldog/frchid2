@@ -37,7 +37,7 @@ static void run_normal_hid()
 
     if (hid_init() == 0) {
         printf("FRCHID: USB HID initialization failed") ;
-        init_failed(1500) ;
+        init_failed(100) ;
     }
 
     printf("FRCHID: USBHID initialization completed\n") ;

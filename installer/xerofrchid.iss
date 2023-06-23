@@ -7,7 +7,7 @@
 #define MyAppURL "http://www.wilsonvillerobotics.com/"
 #define MyAppExeName "FRCHidBootLoader.exe"
 #define MyUserName "ButchGriffin"
-#define MyAppSourceDir "c:\cygwin64\home\butch\robottools\firmware\frchid2\loader"
+#define MyAppSourceDir "d:\cygwin64\home\bwg\mtbprojects\frchid2\loader"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
