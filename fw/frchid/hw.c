@@ -62,15 +62,10 @@ void hw_write(uint8_t *outbuf, uint32_t size)
 
 void hw_read(int16_t *data, uint32_t count, uint32_t *buttons)
 {
-//    if (!adc_read_in_progress) {
-//       adc_read_in_progress = true ;
-//       cyhal_adc_read_async_uv(&adcobj, 1, result_arr);
-//    }
-
    for(int i = 0 ; i < FRC_HID_AXIS_COUNT - 2 ; i++) 
    {
       //
-      // Result is in microvolts, scale to the right value
+      // Result is in the range -2048 to 2047, scale to the range -32768 to 32767
       //
       int32_t adcval = cyhal_adc_read(&adc_chan_obj[i]);
       data[i] = adcval * 16 ;
@@ -114,10 +109,6 @@ int hw_init()
          return 0 ;
       }
    }
-
-   cyhal_adc_register_callback(&adcobj, &adc_event_handler, result_arr);
-   cyhal_adc_enable_event(&adcobj, CYHAL_ADC_ASYNC_READ_COMPLETE, CYHAL_ISR_PRIORITY_DEFAULT, true);
-   memset(result_cached, 0, sizeof(result_cached));
 
    for(int i = 0 ; i < FRC_HID_INPUT_COUNT ; i++) {
       int pin = get_input_pin(i) ;

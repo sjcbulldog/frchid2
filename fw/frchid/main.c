@@ -50,7 +50,7 @@ static void run_normal_hid()
         if (outbufsize > 0) {
             hw_write(outbuf, outbufsize) ;
         }
-        cyhal_system_delay_ms(10) ;
+        cyhal_system_delay_ms(1) ;
     }    
 }
 
