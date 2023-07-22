@@ -62,19 +62,18 @@ void hw_write(uint8_t *outbuf, uint32_t size)
 
 void hw_read(int16_t *data, uint32_t count, uint32_t *buttons)
 {
-   if (!adc_read_in_progress) {
-      adc_read_in_progress = true ;
-      cyhal_adc_read_async_uv(&adcobj, 1, result_arr);
-   }
+//    if (!adc_read_in_progress) {
+//       adc_read_in_progress = true ;
+//       cyhal_adc_read_async_uv(&adcobj, 1, result_arr);
+//    }
 
    for(int i = 0 ; i < FRC_HID_AXIS_COUNT - 2 ; i++) 
    {
       //
       // Result is in microvolts, scale to the right value
       //
-      double volts = (double)(result_cached[i])/1.0e6 ;
-      double ret = volts * (32767.0 / 5.0) - 16384.0 ;
-      data[i] = (int16_t)(ret) ;
+      int32_t adcval = cyhal_adc_read(&adc_chan_obj[i]);
+      data[i] = adcval * 16 ;
    }
 
    data[FRC_HID_AXIS_COUNT - 2] = 0x1425 ;
@@ -83,7 +82,7 @@ void hw_read(int16_t *data, uint32_t count, uint32_t *buttons)
    *buttons = 0 ;
    for(int i = 0 ; i < FRC_HID_INPUT_COUNT ; i++)
    {
-      if (cyhal_gpio_read(get_input_pin(i)) == false)
+      if (cyhal_gpio_read(get_input_pin(i)))
       {
          (*buttons) |= (1 << i) ;
       }
@@ -132,7 +131,7 @@ int hw_init()
    }
 
    for(int i = 0 ; i < FRC_HID_OUTPUT_COUNT ; i++) {
-      res = cyhal_gpio_init(out_pins[i], CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_NONE, false);
+      res = cyhal_gpio_init(out_pins[i], CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, false);
       if (res != CY_RSLT_SUCCESS)
       {
          printf("FRCHID: GPIO output pin %d initialization failed. Error: %lx\n", i, (long unsigned int)res);
