@@ -29,7 +29,13 @@
         "files.exclude": {
             "bootloader_cm0p": true,
             "frchid": true
-        }
+        },
+        "clangd.arguments": [
+            "--query-driver=${config:modustoolbox.toolsPath}/gcc/bin/arm-none-eabi-gcc",
+            "--log=verbose",
+            "--background-index",
+            "--compile-commands-dir=${workspaceFolder}/frchid/build"
+        ]
     },
     "extensions": {
         "recommendations": [ "marus25.cortex-debug", "ms-vscode.cpptools", "dan-c-underwood.arm" ]
